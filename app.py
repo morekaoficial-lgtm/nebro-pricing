@@ -240,7 +240,8 @@ def build_price_dataframe(products_list):
             "Mayoreo A": mayoreo_a,
         }
         for lst in PRICE_LISTS:
-            row[lst] = prices[lst]
+            if lst != "Mayoreo A":  # Evitar duplicado
+                row[lst] = prices[lst]
         row["Precio Actual Shopify"] = p["Precio Actual"]
         row["Status"] = p["Status"]
         rows.append(row)
