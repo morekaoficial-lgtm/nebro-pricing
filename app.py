@@ -359,8 +359,15 @@ with tab1:
             df = build_price_dataframe(filtered)
 
             # Reordenar columnas
-            cols_order = ["Título", "Tipo", "SKU", "Variante", "Rango Costo", "Costo", "Mayoreo A"] + PRICE_LISTS + ["Precio Actual Shopify", "Status"]
-            df = df[[c for c in cols_order if c in df.columns]]
+            cols_order = ["Título", "Tipo", "SKU", "Variante", "Rango Costo", "Costo"] + PRICE_LISTS + ["Precio Actual Shopify", "Status"]
+            # Eliminar duplicados manteniendo orden
+            seen = set()
+            cols_unique = []
+            for c in cols_order:
+                if c in df.columns and c not in seen:
+                    cols_unique.append(c)
+                    seen.add(c)
+            df = df[cols_unique]
 
             st.dataframe(
                 df,
