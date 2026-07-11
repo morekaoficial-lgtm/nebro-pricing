@@ -127,6 +127,54 @@ def get_margin_info(cost):
     row = get_mayoreo_a_range(cost)
     return f"Margen: {row['margin_pct']}% (÷{row['factor']})"
 
+
+# ============================================================
+# FUNCIONES DE ESTILO / COLORES
+# ============================================================
+def style_price_rows(df):
+    """Aplica colores a las celdas de precios basado en ganancia vs costo.
+    - Pérdida (precio < costo) → 🔴 Rojo
+    - Ganancia exacta de $5 → 🟡 Amarillo
+    - Ganancia > $5 → 🟢 Verde
+    """
+    def _style_row(row):
+        styles = ["" for _ in range(len(row))]
+        cost = row.get("Costo")
+        if pd.isna(cost) or cost <= 0:
+            return styles
+
+        # Columnas de precios a colorear
+        price_cols = [c for c in PRICE_LISTS if c in row.index]
+        if "Mayoreo A" in row.index and "Mayoreo A" not in price_cols:
+            price_cols.append("Mayoreo A")
+        if "Precio Actual Shopify" in row.index:
+            price_cols.append("Precio Actual Shopify")
+
+        for col in price_cols:
+            if col not in row.index:
+                continue
+            val = row[col]
+            if pd.isna(val):
+                continue
+
+            profit = val - cost
+            idx = row.index.get_loc(col)
+
+            if profit < 0:
+                # Pérdida → Rojo
+                styles[idx] = "background-color: #ffebee; color: #c62828; font-weight: 600;"
+            elif abs(profit - 5) < 0.01:
+                # Ganancia exacta de $5 → Amarillo
+                styles[idx] = "background-color: #fff9c4; color: #f57f17; font-weight: 600;"
+            elif profit > 5:
+                # Ganancia > $5 → Verde
+                styles[idx] = "background-color: #e8f5e9; color: #2e7d32; font-weight: 600;"
+
+        return styles
+
+    return df.style.apply(_style_row, axis=1)
+
+
 # ============================================================
 # FUNCIONES DE SHOPIFY
 # ============================================================
@@ -369,8 +417,11 @@ with tab1:
                     seen.add(c)
             df = df[cols_unique]
 
+            # Aplicar colores a precios según ganancia
+            styled_df = style_price_rows(df)
+
             st.dataframe(
-                df,
+                styled_df,
                 use_container_width=True,
                 hide_index=True,
                 column_config={
@@ -386,6 +437,15 @@ with tab1:
                     "Precio Actual Shopify": st.column_config.NumberColumn("Precio Actual", format="$%.2f"),
                 }
             )
+
+            # Leyenda de colores
+            st.markdown("""
+            <div style="display: flex; gap: 16px; margin-top: 8px; font-size: 0.85rem;">
+                <span style="background: #ffebee; color: #c62828; padding: 4px 12px; border-radius: 4px; font-weight: 600;">🔴 Pérdida (precio < costo)</span>
+                <span style="background: #fff9c4; color: #f57f17; padding: 4px 12px; border-radius: 4px; font-weight: 600;">🟡 Ganancia = $5</span>
+                <span style="background: #e8f5e9; color: #2e7d32; padding: 4px 12px; border-radius: 4px; font-weight: 600;">🟢 Ganancia > $5</span>
+            </div>
+            """, unsafe_allow_html=True)
 
             # Exportar
             st.divider()
