@@ -132,10 +132,10 @@ def get_margin_info(cost):
 # FUNCIONES DE ESTILO / COLORES
 # ============================================================
 def style_price_rows(df):
-    """Aplica colores a las celdas de precios basado en ganancia vs costo.
+    """Aplica colores a las celdas de precios basado en % de ganancia vs costo.
     - Pérdida (precio < costo) → 🔴 Rojo
-    - Ganancia de $0 a $5 → 🟡 Amarillo
-    - Ganancia > $5 → 🟢 Verde
+    - Ganancia del 0% al 5% sobre costo → 🟡 Amarillo
+    - Ganancia > 5% sobre costo → 🟢 Verde
     """
     def _style_row(row):
         styles = ["" for _ in range(len(row))]
@@ -157,17 +157,16 @@ def style_price_rows(df):
             if pd.isna(val):
                 continue
 
-            profit = val - cost
-            idx = row.index.get_loc(col)
+            profit_pct = ((val - cost) / cost * 100) if cost > 0 else 0
 
-            if profit < 0:
+            if profit_pct < 0:
                 # Pérdida → Rojo
                 styles[idx] = "background-color: #ffebee; color: #c62828; font-weight: 600;"
-            elif 0 <= profit <= 5:
-                # Ganancia de $0 a $5 → Amarillo
+            elif 0 <= profit_pct <= 5:
+                # Ganancia del 0% al 5% sobre costo → Amarillo
                 styles[idx] = "background-color: #fff9c4; color: #f57f17; font-weight: 600;"
-            elif profit > 5:
-                # Ganancia > $5 → Verde
+            elif profit_pct > 5:
+                # Ganancia > 5% sobre costo → Verde
                 styles[idx] = "background-color: #e8f5e9; color: #2e7d32; font-weight: 600;"
 
         return styles
@@ -442,8 +441,8 @@ with tab1:
             st.markdown("""
             <div style="display: flex; gap: 16px; margin-top: 8px; font-size: 0.85rem;">
                 <span style="background: #ffebee; color: #c62828; padding: 4px 12px; border-radius: 4px; font-weight: 600;">🔴 Pérdida (precio < costo)</span>
-                <span style="background: #fff9c4; color: #f57f17; padding: 4px 12px; border-radius: 4px; font-weight: 600;">🟡 Ganancia $0 – $5</span>
-                <span style="background: #e8f5e9; color: #2e7d32; padding: 4px 12px; border-radius: 4px; font-weight: 600;">🟢 Ganancia > $5</span>
+                <span style="background: #fff9c4; color: #f57f17; padding: 4px 12px; border-radius: 4px; font-weight: 600;">🟡 Ganancia 0% – 5% sobre costo</span>
+                <span style="background: #e8f5e9; color: #2e7d32; padding: 4px 12px; border-radius: 4px; font-weight: 600;">🟢 Ganancia > 5% sobre costo</span>
             </div>
             """, unsafe_allow_html=True)
 
