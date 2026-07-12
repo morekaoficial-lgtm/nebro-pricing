@@ -158,6 +158,7 @@ def style_price_rows(df):
                 continue
 
             profit_pct = ((val - cost) / cost * 100) if cost > 0 else 0
+            idx = row.index.get_loc(col)
 
             if profit_pct < 0:
                 # Pérdida → Rojo
