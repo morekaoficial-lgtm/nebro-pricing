@@ -134,7 +134,7 @@ def get_margin_info(cost):
 def style_price_rows(df):
     """Aplica colores a las celdas de precios basado en ganancia vs costo.
     - Pérdida (precio < costo) → 🔴 Rojo
-    - Ganancia exacta de $5 → 🟡 Amarillo
+    - Ganancia de $0 a $5 → 🟡 Amarillo
     - Ganancia > $5 → 🟢 Verde
     """
     def _style_row(row):
@@ -163,8 +163,8 @@ def style_price_rows(df):
             if profit < 0:
                 # Pérdida → Rojo
                 styles[idx] = "background-color: #ffebee; color: #c62828; font-weight: 600;"
-            elif abs(profit - 5) < 0.01:
-                # Ganancia exacta de $5 → Amarillo
+            elif 0 <= profit <= 5:
+                # Ganancia de $0 a $5 → Amarillo
                 styles[idx] = "background-color: #fff9c4; color: #f57f17; font-weight: 600;"
             elif profit > 5:
                 # Ganancia > $5 → Verde
@@ -442,7 +442,7 @@ with tab1:
             st.markdown("""
             <div style="display: flex; gap: 16px; margin-top: 8px; font-size: 0.85rem;">
                 <span style="background: #ffebee; color: #c62828; padding: 4px 12px; border-radius: 4px; font-weight: 600;">🔴 Pérdida (precio < costo)</span>
-                <span style="background: #fff9c4; color: #f57f17; padding: 4px 12px; border-radius: 4px; font-weight: 600;">🟡 Ganancia = $5</span>
+                <span style="background: #fff9c4; color: #f57f17; padding: 4px 12px; border-radius: 4px; font-weight: 600;">🟡 Ganancia $0 – $5</span>
                 <span style="background: #e8f5e9; color: #2e7d32; padding: 4px 12px; border-radius: 4px; font-weight: 600;">🟢 Ganancia > $5</span>
             </div>
             """, unsafe_allow_html=True)
