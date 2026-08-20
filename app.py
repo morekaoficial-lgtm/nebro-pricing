@@ -87,6 +87,13 @@ def get_mayoreo_a_range(cost):
             return row
     return MAYOREO_A_RANGES[-1]
 
+def calculate_mayoreo_a(cost):
+    """Calcula el precio Mayoreo A basado en el costo"""
+    if cost is None or cost <= 0:
+        return None
+    row = get_mayoreo_a_range(cost)
+    return round(cost / row["factor"], 2)
+
 def get_pricing_range(cost):
     """Devuelve la fila de la tabla según el costo"""
     for row in PRICING_TABLE:
