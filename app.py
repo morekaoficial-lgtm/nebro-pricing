@@ -39,7 +39,7 @@ def shopify_request(url, headers=None, timeout=30):
     return response
 
 # ============================================================
-# LISTAS DE PRECIOS NEBRO
+# LISTAS DE PRECIOS NEBRO — SISTEMA ACTUAL (NUEVO)
 # ============================================================
 PRICE_LISTS = [
     "Público",
@@ -62,6 +62,32 @@ PRICING_TABLE = [
     {"min": 1001, "max": float("inf"), "Mayoreo C": 0.40, "Mayoreo B": 0.34, "Mayoreo Z": 0.24, "Media Caja": 0.19, "Caja": 0.13},
 ]
 
+# ============================================================
+# LISTAS DE PRECIOS NEBRO — SISTEMA ANTIGUO (LEGACY)
+# ============================================================
+PRICE_LISTS_LEGACY = [
+    "Público",
+    "2,000 - 3%",
+    "5,000 - 6%",
+    "Mayoreo A",
+    "10,000 - 8%",
+    "20,000 - 12%",
+    "30,000 - 15%",
+    "50,000 - 20%",
+]
+
+# Descuentos sobre Mayoreo A para el sistema antiguo
+DISCOUNTS_LEGACY = {
+    "Público":         {"type": "costo_x",  "value": 2.00},   # Costo × 2
+    "2,000 - 3%":      {"type": "discount", "value": 0.03},  # Mayoreo A - 3%
+    "5,000 - 6%":      {"type": "discount", "value": 0.06},  # Mayoreo A - 6%
+    "Mayoreo A":       {"type": "discount", "value": 0.00},  # Sin descuento
+    "10,000 - 8%":     {"type": "discount", "value": 0.08},  # Mayoreo A - 8%
+    "20,000 - 12%":    {"type": "discount", "value": 0.12},  # Mayoreo A - 12%
+    "30,000 - 15%":    {"type": "discount", "value": 0.15},  # Mayoreo A - 15%
+    "50,000 - 20%":    {"type": "discount", "value": 0.20},  # Mayoreo A - 20%
+}
+
 # Rangos de costo para calcular Mayoreo A (mantener igual)
 MAYOREO_A_RANGES = [
     {"min": 0,    "max": 29.99,  "factor": 0.73, "margin_pct": 27},
@@ -70,12 +96,6 @@ MAYOREO_A_RANGES = [
     {"min": 150.01, "max": float("inf"), "factor": 0.78, "margin_pct": 22},
 ]
 
-# Descuentos sobre Mayoreo A para las demás listas (YA NO SE USA — reemplazado por PRICING_TABLE)
-# Mantenido comentado para referencia histórica
-# DISCOUNTS = {
-#     "Público":         {"type": "costo_x",  "value": 2.00},
-#     ...
-# }
 
 # ============================================================
 # FUNCIONES DE CÁLCULO
@@ -131,6 +151,25 @@ def calculate_prices(cost):
             prices[lst] = round(cost * (1 + pricing_row[lst]), 2)
         else:
             prices[lst] = None
+
+    return prices
+
+def calculate_prices_legacy(cost):
+    """Calcula todas las listas de precios con el sistema ANTIGUO (legacy)"""
+    if cost is None or cost <= 0:
+        return {lst: None for lst in PRICE_LISTS_LEGACY}
+
+    mayoreo_a = calculate_mayoreo_a(cost)
+    prices = {}
+
+    for lst in PRICE_LISTS_LEGACY:
+        rule = DISCOUNTS_LEGACY[lst]
+        if rule["type"] == "costo_x":
+            # Público: Costo × 2
+            prices[lst] = round(cost * rule["value"], 2)
+        elif rule["type"] == "discount":
+            # Resto: Mayoreo A - descuento%
+            prices[lst] = round(mayoreo_a * (1 - rule["value"]), 2)
 
     return prices
 
@@ -341,7 +380,7 @@ st.markdown('<div class="sub-header">Sistema de pricing por costo — nebro.shop
 # ───────────────────────────────────────────────
 # TABS
 # ───────────────────────────────────────────────
-tab1, tab2 = st.tabs(["🛒 Productos Shopify", "🧮 Calculadora Manual"])
+tab1, tab2, tab3 = st.tabs(["🛒 Productos Shopify", "🧮 Calculadora Manual", "📊 Comparativo Antiguo vs Nuevo"])
 
 # ============================================================
 # TAB 1: PRODUCTOS SHOPIFY
@@ -663,6 +702,173 @@ with tab2:
             )
         else:
             st.info("Ingresa un costo mayor a 0 para ver los cálculos.")
+
+# ============================================================
+# TAB 3: COMPARATIVO ANTIGUO vs NUEVO
+# ============================================================
+with tab3:
+    st.subheader("📊 Comparativo: Sistema Antiguo vs Sistema Nuevo")
+    st.markdown("Compara cómo cambian los precios entre el sistema anterior (descuentos sobre Mayoreo A) y el nuevo sistema (porcentajes sobre costo).")
+
+    cost_comp = st.number_input(
+        "💰 Costo del producto ($)",
+        min_value=0.0,
+        max_value=100000.0,
+        value=100.0,
+        step=1.0,
+        format="%.2f",
+        key="cost_comparativo"
+    )
+
+    if cost_comp > 0:
+        mayoreo_a = calculate_mayoreo_a(cost_comp)
+
+        col_old, col_new = st.columns(2)
+
+        # ── SISTEMA ANTIGUO ──
+        with col_old:
+            st.markdown("""
+            <div style="background: #e3f2fd; padding: 12px; border-radius: 8px; margin-bottom: 12px;">
+                <div style="font-size: 1.1rem; font-weight: 700; color: #1565c0;">🏛️ Sistema Antiguo</div>
+                <div style="font-size: 0.85rem; color: #555;">Descuentos sobre Mayoreo A</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            prices_old = calculate_prices_legacy(cost_comp)
+
+            old_data = []
+            for lst in PRICE_LISTS_LEGACY:
+                price = prices_old[lst]
+                margin = price - cost_comp
+                margin_pct = (margin / cost_comp * 100) if cost_comp > 0 else 0
+                old_data.append({
+                    "Lista": lst,
+                    "Precio": price,
+                    "Margen $": margin,
+                    "Margen %": f"{margin_pct:.1f}%",
+                })
+
+            df_old = pd.DataFrame(old_data)
+            st.dataframe(
+                df_old,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Precio": st.column_config.NumberColumn(format="$%.2f"),
+                    "Margen $": st.column_config.NumberColumn(format="$%.2f"),
+                }
+            )
+
+        # ── SISTEMA NUEVO ──
+        with col_new:
+            st.markdown("""
+            <div style="background: #e8f5e9; padding: 12px; border-radius: 8px; margin-bottom: 12px;">
+                <div style="font-size: 1.1rem; font-weight: 700; color: #2e7d32;">🆕 Sistema Nuevo</div>
+                <div style="font-size: 0.85rem; color: #555;">Porcentajes sobre Costo</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            prices_new = calculate_prices(cost_comp)
+
+            new_data = []
+            for lst in PRICE_LISTS:
+                price = prices_new[lst]
+                margin = price - cost_comp
+                margin_pct = (margin / cost_comp * 100) if cost_comp > 0 else 0
+                new_data.append({
+                    "Lista": lst,
+                    "Precio": price,
+                    "Margen $": margin,
+                    "Margen %": f"{margin_pct:.1f}%",
+                })
+
+            df_new = pd.DataFrame(new_data)
+            st.dataframe(
+                df_new,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Precio": st.column_config.NumberColumn(format="$%.2f"),
+                    "Margen $": st.column_config.NumberColumn(format="$%.2f"),
+                }
+            )
+
+        # ── TABLA COMPARATIVA CRUZADA ──
+        st.divider()
+        st.markdown("### 📋 Tabla Comparativa Cruzada")
+        st.markdown("Muestra las diferencias de precio entre ambos sistemas para las listas equivalentes.")
+
+        compare_data = []
+        # Mapeo aproximado entre listas antiguas y nuevas
+        mapping = [
+            ("Público", "Público"),
+            ("Mayoreo A", "Mayoreo A"),
+            ("2,000 - 3%", "Mayoreo C"),
+            ("5,000 - 6%", "Mayoreo B"),
+            ("10,000 - 8%", "Mayoreo Z"),
+            ("20,000 - 12%", "Media Caja"),
+            ("30,000 - 15%", "Caja"),
+        ]
+
+        for old_name, new_name in mapping:
+            price_old = prices_old.get(old_name, 0)
+            price_new = prices_new.get(new_name, 0)
+            diff = price_new - price_old
+            diff_pct = ((price_new - price_old) / price_old * 100) if price_old > 0 else 0
+            compare_data.append({
+                "Lista (Antigua)": old_name,
+                "Lista (Nueva)": new_name,
+                "Precio Antiguo": price_old,
+                "Precio Nuevo": price_new,
+                "Diferencia $": diff,
+                "Diferencia %": f"{diff_pct:+.1f}%",
+            })
+
+        df_compare = pd.DataFrame(compare_data)
+
+        def style_compare(df):
+            def _style_row(row):
+                styles = ["" for _ in range(len(row))]
+                diff = row.get("Diferencia $", 0)
+                idx = row.index.get_loc("Diferencia %")
+                if diff > 0:
+                    styles[idx] = "background-color: #e8f5e9; color: #2e7d32; font-weight: 600;"
+                elif diff < 0:
+                    styles[idx] = "background-color: #ffebee; color: #c62828; font-weight: 600;"
+                return styles
+            return df.style.apply(_style_row, axis=1)
+
+        st.dataframe(
+            style_compare(df_compare),
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "Precio Antiguo": st.column_config.NumberColumn(format="$%.2f"),
+                "Precio Nuevo": st.column_config.NumberColumn(format="$%.2f"),
+                "Diferencia $": st.column_config.NumberColumn(format="$%.2f"),
+            }
+        )
+
+        # Leyenda
+        st.markdown("""
+        <div style="display: flex; gap: 16px; margin-top: 8px; font-size: 0.85rem;">
+            <span style="background: #e8f5e9; color: #2e7d32; padding: 4px 12px; border-radius: 4px; font-weight: 600;">🟢 Verde = Subió de precio</span>
+            <span style="background: #ffebee; color: #c62828; padding: 4px 12px; border-radius: 4px; font-weight: 600;">🔴 Rojo = Bajó de precio</span>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Exportar comparativo
+        st.divider()
+        csv_compare = df_compare.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            "📥 Descargar CSV Comparativo",
+            csv_compare,
+            f"comparativo_nebro_{cost_comp:.0f}.csv",
+            "text/csv",
+            use_container_width=True
+        )
+    else:
+        st.info("Ingresa un costo mayor a 0 para ver la comparación.")
 
 # ============================================================
 # FOOTER
