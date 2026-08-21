@@ -704,153 +704,201 @@ with tab2:
             st.info("Ingresa un costo mayor a 0 para ver los cálculos.")
 
 # ============================================================
-# TAB 3: CALCULADORA POR VOLUMEN
+# TAB 3: CALCULADORA POR VOLUMEN (con productos Shopify)
 # ============================================================
 with tab3:
     st.subheader("🧮 Calculadora por Volumen")
-    st.markdown("Calcula el impacto de vender por volumen. Identifica si hay pérdida o ganancia según la cantidad vendida.")
+    st.markdown("Carga los productos de nebro-shop y analiza la ganancia o pérdida según el volumen de venta.")
 
-    col_input_vol, col_results_vol = st.columns([1, 2])
+    # ── Cargar productos ──
+    col1_vol, col2_vol = st.columns([1, 3])
+    with col1_vol:
+        if st.button("🔄 Cargar Productos", type="primary", use_container_width=True, key="btn_volumen"):
+            products_vol = fetch_shopify_products_with_progress()
+            st.session_state["nebro_products_volumen"] = products_vol
+            st.success(f"✅ {len(products_vol)} variantes cargadas")
 
-    with col_input_vol:
-        st.markdown("### 💰 Datos del Producto")
-        cost_vol = st.number_input(
-            "Costo unitario ($)",
-            min_value=0.0,
-            max_value=100000.0,
-            value=100.0,
-            step=1.0,
-            format="%.2f",
-            key="cost_volumen"
-        )
+    with col2_vol:
+        st.info("Haz clic en 'Cargar Productos' para obtener los costos de Shopify.")
 
-        qty_vol = st.number_input(
-            "Cantidad / Volumen de venta",
-            min_value=1,
-            max_value=100000,
-            value=10,
-            step=1,
-            key="qty_volumen"
-        )
+    # ── Input de cantidad ──
+    qty_global = st.number_input(
+        "📦 Cantidad / Volumen de venta (aplica a todos los productos)",
+        min_value=1,
+        max_value=100000,
+        value=10,
+        step=1,
+        key="qty_global"
+    )
 
-        if cost_vol > 0:
-            row = get_mayoreo_a_range(cost_vol)
-            st.markdown(
-                f"<div class='cost-badge'>Rango: {get_rangename(cost_vol)} | "
-                f"Margen: {row['margin_pct']}% (÷{row['factor']})</div>",
-                unsafe_allow_html=True
+    if "nebro_products_volumen" in st.session_state:
+        products_vol = st.session_state["nebro_products_volumen"]
+        products_with_cost_vol = [p for p in products_vol if p["Costo"] is not None and p["Costo"] > 0]
+
+        # Stats
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Total Variantes", len(products_vol))
+        c2.metric("Con Costo", len(products_with_cost_vol))
+        c3.metric("Volumen", f"{qty_global:,} uds")
+
+        # Filtros
+        st.divider()
+        col_f1, col_f2 = st.columns(2)
+        with col_f1:
+            filter_type_vol = st.multiselect(
+                "Filtrar por Tipo de Producto",
+                options=sorted(list(set(p["Tipo"] for p in products_with_cost_vol if p["Tipo"]))),
+                default=[],
+                key="filter_type_vol"
+            )
+        with col_f2:
+            filter_status_vol = st.multiselect(
+                "Filtrar por Status",
+                options=["active", "draft", "archived"],
+                default=["active"],
+                key="filter_status_vol"
             )
 
-        st.divider()
-        st.markdown("### 📋 Tabla de Porcentajes sobre Costo")
-        pricing_data_vol = []
-        for r in PRICING_TABLE:
-            if r["max"] == float("inf"):
-                rango = f"${r['min']}+"
-            else:
-                rango = f"${r['min']}-{r['max']}"
-            pricing_data_vol.append({
-                "Rango Costo": rango,
-                "Mayoreo C": f"{r['Mayoreo C']*100:.0f}%",
-                "Mayoreo B": f"{r['Mayoreo B']*100:.0f}%",
-                "Mayoreo Z": f"{r['Mayoreo Z']*100:.0f}%",
-                "Media Caja": f"{r['Media Caja']*100:.0f}%",
-                "Caja": f"{r['Caja']*100:.0f}%",
-            })
+        # Buscador
+        search_title_vol = st.text_input(
+            "🔍 Buscar por Título",
+            placeholder="Ej: Bocina, Audífonos, Cable...",
+            value="",
+            key="search_title_vol"
+        )
 
-        df_pricing_vol = pd.DataFrame(pricing_data_vol)
-        st.dataframe(df_pricing_vol, use_container_width=True, hide_index=True)
+        # Aplicar filtros
+        filtered_vol = products_with_cost_vol
+        if filter_type_vol:
+            filtered_vol = [p for p in filtered_vol if p["Tipo"] in filter_type_vol]
+        if filter_status_vol:
+            filtered_vol = [p for p in filtered_vol if p["Status"] in filter_status_vol]
+        if search_title_vol:
+            term = search_title_vol.lower()
+            filtered_vol = [p for p in filtered_vol if term in p["Título"].lower()]
 
-    with col_results_vol:
-        if cost_vol > 0 and qty_vol > 0:
-            st.markdown("### 📊 Análisis por Volumen")
+        if filtered_vol:
+            # Construir DataFrame con análisis por volumen
+            rows_vol = []
+            for p in filtered_vol:
+                cost = p["Costo"]
+                if cost is None or cost <= 0:
+                    continue
 
-            prices_vol = calculate_prices(cost_vol)
-            pricing_row_vol = get_pricing_range(cost_vol)
-            total_cost_vol = cost_vol * qty_vol
+                prices = calculate_prices(cost)
+                total_cost = cost * qty_global
 
-            # Cards resumen
-            col_cards1, col_cards2, col_cards3 = st.columns(3)
-            with col_cards1:
-                st.metric("Costo Total", f"${total_cost_vol:,.2f}")
-            with col_cards2:
-                st.metric("Cantidad", f"{qty_vol:,} uds")
-            with col_cards3:
-                st.metric("Costo Unitario", f"${cost_vol:,.2f}")
+                row = {
+                    "Título": p["Título"],
+                    "Tipo": p["Tipo"],
+                    "SKU": p["SKU"],
+                    "Variante": p["Variante"],
+                    "Costo Unitario": cost,
+                    "Costo Total": total_cost,
+                }
 
-            st.divider()
+                # Solo listas de volumen (excluir Público y Mayoreo A)
+                for lst in PRICE_LISTS:
+                    if lst in ["Público", "Mayoreo A"]:
+                        continue
 
-            # Tabla por volumen
-            vol_data = []
-            for lst in PRICE_LISTS:
-                if lst in ["Público", "Mayoreo A"]:
-                    continue  # Solo listas de volumen
+                    price_unit = prices[lst]
+                    total_revenue = price_unit * qty_global
+                    total_margin = total_revenue - total_cost
+                    margin_pct = (total_margin / total_cost * 100) if total_cost > 0 else 0
 
-                price_unit = prices_vol[lst]
-                total_revenue = price_unit * qty_vol
-                total_margin = total_revenue - total_cost_vol
-                margin_pct = (total_margin / total_cost_vol * 100) if total_cost_vol > 0 else 0
-                unit_margin = price_unit - cost_vol
+                    row[f"{lst} Unit"] = price_unit
+                    row[f"{lst} Total"] = total_revenue
+                    row[f"{lst} Ganancia"] = total_margin
+                    row[f"{lst} Margen%"] = margin_pct
 
-                # Determinar si hay pérdida
-                status = "✅ Ganancia" if total_margin >= 0 else "🔴 PÉRDIDA"
-                status_color = "#2e7d32" if total_margin >= 0 else "#c62828"
+                rows_vol.append(row)
 
-                vol_data.append({
-                    "Lista": lst,
-                    "Precio Unitario": price_unit,
-                    "Margen Unitario": unit_margin,
-                    "Ingreso Total": total_revenue,
-                    "Ganancia Total": total_margin,
-                    "Margen %": f"{margin_pct:.1f}%",
-                    "Estado": status,
-                })
+            df_vol = pd.DataFrame(rows_vol)
 
-            df_vol = pd.DataFrame(vol_data)
-
-            def style_volume(df):
+            # Función de coloreado por ganancia/pérdida
+            def style_volume_products(df):
                 def _style_row(row):
                     styles = ["" for _ in range(len(row))]
-                    ganancia = row.get("Ganancia Total", 0)
-                    idx_estado = row.index.get_loc("Estado")
-                    if ganancia < 0:
-                        styles[idx_estado] = "background-color: #ffebee; color: #c62828; font-weight: 600;"
-                    else:
-                        styles[idx_estado] = "background-color: #e8f5e9; color: #2e7d32; font-weight: 600;"
+                    for col in df.columns:
+                        if "Ganancia" in col:
+                            idx = row.index.get_loc(col)
+                            val = row[col]
+                            if pd.isna(val):
+                                continue
+                            if val < 0:
+                                styles[idx] = "background-color: #ffebee; color: #c62828; font-weight: 600;"
+                            elif val >= 0:
+                                styles[idx] = "background-color: #e8f5e9; color: #2e7d32; font-weight: 600;"
+                        elif "Margen%" in col:
+                            idx = row.index.get_loc(col)
+                            val = row[col]
+                            if pd.isna(val):
+                                continue
+                            if val < 0:
+                                styles[idx] = "background-color: #ffebee; color: #c62828;"
+                            elif val < 10:
+                                styles[idx] = "background-color: #fff9c4; color: #f57f17;"
+                            else:
+                                styles[idx] = "background-color: #e8f5e9; color: #2e7d32;"
                     return styles
                 return df.style.apply(_style_row, axis=1)
 
+            st.markdown(f"### 📊 Productos con análisis por volumen ({qty_global:,} uds)")
+
             st.dataframe(
-                style_volume(df_vol),
+                style_volume_products(df_vol),
                 use_container_width=True,
                 hide_index=True,
                 column_config={
-                    "Precio Unitario": st.column_config.NumberColumn(format="$%.2f"),
-                    "Margen Unitario": st.column_config.NumberColumn(format="$%.2f"),
-                    "Ingreso Total": st.column_config.NumberColumn(format="$%.2f"),
-                    "Ganancia Total": st.column_config.NumberColumn(format="$%.2f"),
+                    "Costo Unitario": st.column_config.NumberColumn(format="$%.2f"),
+                    "Costo Total": st.column_config.NumberColumn(format="$%.2f"),
                 }
             )
 
-            # Alerta de pérdida
-            loss_items = [v for v in vol_data if v["Ganancia Total"] < 0]
-            if loss_items:
-                st.warning(f"⚠️ **{len(loss_items)} listas** generan PÉRDIDA con este volumen. Revisa los precios o la cantidad.")
+            # Leyenda
+            st.markdown("""
+            <div style="display: flex; gap: 16px; margin-top: 8px; font-size: 0.85rem;">
+                <span style="background: #ffebee; color: #c62828; padding: 4px 12px; border-radius: 4px; font-weight: 600;">🔴 Pérdida</span>
+                <span style="background: #fff9c4; color: #f57f17; padding: 4px 12px; border-radius: 4px; font-weight: 600;">🟡 Margen < 10%</span>
+                <span style="background: #e8f5e9; color: #2e7d32; padding: 4px 12px; border-radius: 4px; font-weight: 600;">🟢 Ganancia</span>
+            </div>
+            """, unsafe_allow_html=True)
+
+            # Resumen de productos con pérdida
+            st.divider()
+            loss_products = []
+            for _, row in df_vol.iterrows():
+                for col in df_vol.columns:
+                    if "Ganancia" in col and row[col] < 0:
+                        loss_products.append({
+                            "Producto": row["Título"],
+                            "SKU": row["SKU"],
+                            "Lista": col.replace(" Ganancia", ""),
+                            "Ganancia": row[col],
+                        })
+
+            if loss_products:
+                st.warning(f"⚠️ **{len(loss_products)} combinaciones** de producto+lista generan PÉRDIDA con volumen de {qty_global:,} uds.")
+                df_loss = pd.DataFrame(loss_products)
+                st.dataframe(df_loss, use_container_width=True, hide_index=True)
             else:
-                st.success("✅ Todas las listas generan ganancia con este volumen.")
+                st.success(f"✅ Todas las listas generan ganancia con volumen de {qty_global:,} uds.")
 
             # Exportar
             st.divider()
-            csv_vol = df_vol.to_csv(index=False).encode("utf-8")
+            csv_vol_products = df_vol.to_csv(index=False).encode("utf-8")
             st.download_button(
                 "📥 Descargar CSV por Volumen",
-                csv_vol,
-                f"volumen_nebro_{cost_vol:.0f}_x{qty_vol}.csv",
+                csv_vol_products,
+                f"volumen_nebro_{qty_global}uds_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
                 "text/csv",
                 use_container_width=True
             )
         else:
-            st.info("Ingresa un costo y cantidad mayor a 0 para ver el análisis.")
+            st.warning("No hay productos que coincidan con los filtros.")
+    else:
+        st.info("👆 Haz clic en 'Cargar Productos' para comenzar.")
 
 # ============================================================
 # FOOTER
