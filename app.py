@@ -707,8 +707,8 @@ with tab2:
 # TAB 3: CALCULADORA POR VOLUMEN (con productos Shopify)
 # ============================================================
 with tab3:
-    st.subheader("🧮 Calculadora por Volumen")
-    st.markdown("Carga los productos de nebro-shop y analiza la ganancia o pérdida según el volumen de venta.")
+    st.subheader("🧮 Calculadora por Volumen — Sistema Antiguo")
+    st.markdown("Carga los productos de nebro-shop y analiza la ganancia o pérdida con el **sistema antiguo de listas** (descuentos sobre Mayoreo A).")
 
     # ── Cargar productos ──
     col1_vol, col2_vol = st.columns([1, 3])
@@ -785,7 +785,7 @@ with tab3:
                 if cost is None or cost <= 0:
                     continue
 
-                prices = calculate_prices(cost)
+                prices = calculate_prices_legacy(cost)
                 total_cost = cost * qty_global
 
                 row = {
@@ -797,8 +797,8 @@ with tab3:
                     "Costo Total": total_cost,
                 }
 
-                # Solo listas de volumen (excluir Público y Mayoreo A)
-                for lst in PRICE_LISTS:
+                # Solo listas de volumen antiguas (excluir Público y Mayoreo A)
+                for lst in PRICE_LISTS_LEGACY:
                     if lst in ["Público", "Mayoreo A"]:
                         continue
 
