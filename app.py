@@ -380,7 +380,7 @@ st.markdown('<div class="sub-header">Sistema de pricing por costo — nebro.shop
 # ───────────────────────────────────────────────
 # TABS
 # ───────────────────────────────────────────────
-tab1, tab2, tab3 = st.tabs(["🛒 Productos Shopify", "🧮 Calculadora Manual", "📊 Comparativo Antiguo vs Nuevo"])
+tab1, tab2, tab3 = st.tabs(["🛒 Productos Shopify", "🧮 Calculadora Manual", "🧮 Calculadora por Volumen"])
 
 # ============================================================
 # TAB 1: PRODUCTOS SHOPIFY
@@ -704,171 +704,153 @@ with tab2:
             st.info("Ingresa un costo mayor a 0 para ver los cálculos.")
 
 # ============================================================
-# TAB 3: COMPARATIVO ANTIGUO vs NUEVO
+# TAB 3: CALCULADORA POR VOLUMEN
 # ============================================================
 with tab3:
-    st.subheader("📊 Comparativo: Sistema Antiguo vs Sistema Nuevo")
-    st.markdown("Compara cómo cambian los precios entre el sistema anterior (descuentos sobre Mayoreo A) y el nuevo sistema (porcentajes sobre costo).")
+    st.subheader("🧮 Calculadora por Volumen")
+    st.markdown("Calcula el impacto de vender por volumen. Identifica si hay pérdida o ganancia según la cantidad vendida.")
 
-    cost_comp = st.number_input(
-        "💰 Costo del producto ($)",
-        min_value=0.0,
-        max_value=100000.0,
-        value=100.0,
-        step=1.0,
-        format="%.2f",
-        key="cost_comparativo"
-    )
+    col_input_vol, col_results_vol = st.columns([1, 2])
 
-    if cost_comp > 0:
-        mayoreo_a = calculate_mayoreo_a(cost_comp)
+    with col_input_vol:
+        st.markdown("### 💰 Datos del Producto")
+        cost_vol = st.number_input(
+            "Costo unitario ($)",
+            min_value=0.0,
+            max_value=100000.0,
+            value=100.0,
+            step=1.0,
+            format="%.2f",
+            key="cost_volumen"
+        )
 
-        col_old, col_new = st.columns(2)
+        qty_vol = st.number_input(
+            "Cantidad / Volumen de venta",
+            min_value=1,
+            max_value=100000,
+            value=10,
+            step=1,
+            key="qty_volumen"
+        )
 
-        # ── SISTEMA ANTIGUO ──
-        with col_old:
-            st.markdown("""
-            <div style="background: #e3f2fd; padding: 12px; border-radius: 8px; margin-bottom: 12px;">
-                <div style="font-size: 1.1rem; font-weight: 700; color: #1565c0;">🏛️ Sistema Antiguo</div>
-                <div style="font-size: 0.85rem; color: #555;">Descuentos sobre Mayoreo A</div>
-            </div>
-            """, unsafe_allow_html=True)
-
-            prices_old = calculate_prices_legacy(cost_comp)
-
-            old_data = []
-            for lst in PRICE_LISTS_LEGACY:
-                price = prices_old[lst]
-                margin = price - cost_comp
-                margin_pct = (margin / cost_comp * 100) if cost_comp > 0 else 0
-                old_data.append({
-                    "Lista": lst,
-                    "Precio": price,
-                    "Margen $": margin,
-                    "Margen %": f"{margin_pct:.1f}%",
-                })
-
-            df_old = pd.DataFrame(old_data)
-            st.dataframe(
-                df_old,
-                use_container_width=True,
-                hide_index=True,
-                column_config={
-                    "Precio": st.column_config.NumberColumn(format="$%.2f"),
-                    "Margen $": st.column_config.NumberColumn(format="$%.2f"),
-                }
+        if cost_vol > 0:
+            row = get_mayoreo_a_range(cost_vol)
+            st.markdown(
+                f"<div class='cost-badge'>Rango: {get_rangename(cost_vol)} | "
+                f"Margen: {row['margin_pct']}% (÷{row['factor']})</div>",
+                unsafe_allow_html=True
             )
 
-        # ── SISTEMA NUEVO ──
-        with col_new:
-            st.markdown("""
-            <div style="background: #e8f5e9; padding: 12px; border-radius: 8px; margin-bottom: 12px;">
-                <div style="font-size: 1.1rem; font-weight: 700; color: #2e7d32;">🆕 Sistema Nuevo</div>
-                <div style="font-size: 0.85rem; color: #555;">Porcentajes sobre Costo</div>
-            </div>
-            """, unsafe_allow_html=True)
-
-            prices_new = calculate_prices(cost_comp)
-
-            new_data = []
-            for lst in PRICE_LISTS:
-                price = prices_new[lst]
-                margin = price - cost_comp
-                margin_pct = (margin / cost_comp * 100) if cost_comp > 0 else 0
-                new_data.append({
-                    "Lista": lst,
-                    "Precio": price,
-                    "Margen $": margin,
-                    "Margen %": f"{margin_pct:.1f}%",
-                })
-
-            df_new = pd.DataFrame(new_data)
-            st.dataframe(
-                df_new,
-                use_container_width=True,
-                hide_index=True,
-                column_config={
-                    "Precio": st.column_config.NumberColumn(format="$%.2f"),
-                    "Margen $": st.column_config.NumberColumn(format="$%.2f"),
-                }
-            )
-
-        # ── TABLA COMPARATIVA CRUZADA ──
         st.divider()
-        st.markdown("### 📋 Tabla Comparativa Cruzada")
-        st.markdown("Muestra las diferencias de precio entre ambos sistemas para las listas equivalentes.")
-
-        compare_data = []
-        # Mapeo aproximado entre listas antiguas y nuevas
-        mapping = [
-            ("Público", "Público"),
-            ("Mayoreo A", "Mayoreo A"),
-            ("2,000 - 3%", "Mayoreo C"),
-            ("5,000 - 6%", "Mayoreo B"),
-            ("10,000 - 8%", "Mayoreo Z"),
-            ("20,000 - 12%", "Media Caja"),
-            ("30,000 - 15%", "Caja"),
-        ]
-
-        for old_name, new_name in mapping:
-            price_old = prices_old.get(old_name, 0)
-            price_new = prices_new.get(new_name, 0)
-            diff = price_new - price_old
-            diff_pct = ((price_new - price_old) / price_old * 100) if price_old > 0 else 0
-            compare_data.append({
-                "Lista (Antigua)": old_name,
-                "Lista (Nueva)": new_name,
-                "Precio Antiguo": price_old,
-                "Precio Nuevo": price_new,
-                "Diferencia $": diff,
-                "Diferencia %": f"{diff_pct:+.1f}%",
+        st.markdown("### 📋 Tabla de Porcentajes sobre Costo")
+        pricing_data_vol = []
+        for r in PRICING_TABLE:
+            if r["max"] == float("inf"):
+                rango = f"${r['min']}+"
+            else:
+                rango = f"${r['min']}-{r['max']}"
+            pricing_data_vol.append({
+                "Rango Costo": rango,
+                "Mayoreo C": f"{r['Mayoreo C']*100:.0f}%",
+                "Mayoreo B": f"{r['Mayoreo B']*100:.0f}%",
+                "Mayoreo Z": f"{r['Mayoreo Z']*100:.0f}%",
+                "Media Caja": f"{r['Media Caja']*100:.0f}%",
+                "Caja": f"{r['Caja']*100:.0f}%",
             })
 
-        df_compare = pd.DataFrame(compare_data)
+        df_pricing_vol = pd.DataFrame(pricing_data_vol)
+        st.dataframe(df_pricing_vol, use_container_width=True, hide_index=True)
 
-        def style_compare(df):
-            def _style_row(row):
-                styles = ["" for _ in range(len(row))]
-                diff = row.get("Diferencia $", 0)
-                idx = row.index.get_loc("Diferencia %")
-                if diff > 0:
-                    styles[idx] = "background-color: #e8f5e9; color: #2e7d32; font-weight: 600;"
-                elif diff < 0:
-                    styles[idx] = "background-color: #ffebee; color: #c62828; font-weight: 600;"
-                return styles
-            return df.style.apply(_style_row, axis=1)
+    with col_results_vol:
+        if cost_vol > 0 and qty_vol > 0:
+            st.markdown("### 📊 Análisis por Volumen")
 
-        st.dataframe(
-            style_compare(df_compare),
-            use_container_width=True,
-            hide_index=True,
-            column_config={
-                "Precio Antiguo": st.column_config.NumberColumn(format="$%.2f"),
-                "Precio Nuevo": st.column_config.NumberColumn(format="$%.2f"),
-                "Diferencia $": st.column_config.NumberColumn(format="$%.2f"),
-            }
-        )
+            prices_vol = calculate_prices(cost_vol)
+            pricing_row_vol = get_pricing_range(cost_vol)
+            total_cost_vol = cost_vol * qty_vol
 
-        # Leyenda
-        st.markdown("""
-        <div style="display: flex; gap: 16px; margin-top: 8px; font-size: 0.85rem;">
-            <span style="background: #e8f5e9; color: #2e7d32; padding: 4px 12px; border-radius: 4px; font-weight: 600;">🟢 Verde = Subió de precio</span>
-            <span style="background: #ffebee; color: #c62828; padding: 4px 12px; border-radius: 4px; font-weight: 600;">🔴 Rojo = Bajó de precio</span>
-        </div>
-        """, unsafe_allow_html=True)
+            # Cards resumen
+            col_cards1, col_cards2, col_cards3 = st.columns(3)
+            with col_cards1:
+                st.metric("Costo Total", f"${total_cost_vol:,.2f}")
+            with col_cards2:
+                st.metric("Cantidad", f"{qty_vol:,} uds")
+            with col_cards3:
+                st.metric("Costo Unitario", f"${cost_vol:,.2f}")
 
-        # Exportar comparativo
-        st.divider()
-        csv_compare = df_compare.to_csv(index=False).encode("utf-8")
-        st.download_button(
-            "📥 Descargar CSV Comparativo",
-            csv_compare,
-            f"comparativo_nebro_{cost_comp:.0f}.csv",
-            "text/csv",
-            use_container_width=True
-        )
-    else:
-        st.info("Ingresa un costo mayor a 0 para ver la comparación.")
+            st.divider()
+
+            # Tabla por volumen
+            vol_data = []
+            for lst in PRICE_LISTS:
+                if lst in ["Público", "Mayoreo A"]:
+                    continue  # Solo listas de volumen
+
+                price_unit = prices_vol[lst]
+                total_revenue = price_unit * qty_vol
+                total_margin = total_revenue - total_cost_vol
+                margin_pct = (total_margin / total_cost_vol * 100) if total_cost_vol > 0 else 0
+                unit_margin = price_unit - cost_vol
+
+                # Determinar si hay pérdida
+                status = "✅ Ganancia" if total_margin >= 0 else "🔴 PÉRDIDA"
+                status_color = "#2e7d32" if total_margin >= 0 else "#c62828"
+
+                vol_data.append({
+                    "Lista": lst,
+                    "Precio Unitario": price_unit,
+                    "Margen Unitario": unit_margin,
+                    "Ingreso Total": total_revenue,
+                    "Ganancia Total": total_margin,
+                    "Margen %": f"{margin_pct:.1f}%",
+                    "Estado": status,
+                })
+
+            df_vol = pd.DataFrame(vol_data)
+
+            def style_volume(df):
+                def _style_row(row):
+                    styles = ["" for _ in range(len(row))]
+                    ganancia = row.get("Ganancia Total", 0)
+                    idx_estado = row.index.get_loc("Estado")
+                    if ganancia < 0:
+                        styles[idx_estado] = "background-color: #ffebee; color: #c62828; font-weight: 600;"
+                    else:
+                        styles[idx_estado] = "background-color: #e8f5e9; color: #2e7d32; font-weight: 600;"
+                    return styles
+                return df.style.apply(_style_row, axis=1)
+
+            st.dataframe(
+                style_volume(df_vol),
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Precio Unitario": st.column_config.NumberColumn(format="$%.2f"),
+                    "Margen Unitario": st.column_config.NumberColumn(format="$%.2f"),
+                    "Ingreso Total": st.column_config.NumberColumn(format="$%.2f"),
+                    "Ganancia Total": st.column_config.NumberColumn(format="$%.2f"),
+                }
+            )
+
+            # Alerta de pérdida
+            loss_items = [v for v in vol_data if v["Ganancia Total"] < 0]
+            if loss_items:
+                st.warning(f"⚠️ **{len(loss_items)} listas** generan PÉRDIDA con este volumen. Revisa los precios o la cantidad.")
+            else:
+                st.success("✅ Todas las listas generan ganancia con este volumen.")
+
+            # Exportar
+            st.divider()
+            csv_vol = df_vol.to_csv(index=False).encode("utf-8")
+            st.download_button(
+                "📥 Descargar CSV por Volumen",
+                csv_vol,
+                f"volumen_nebro_{cost_vol:.0f}_x{qty_vol}.csv",
+                "text/csv",
+                use_container_width=True
+            )
+        else:
+            st.info("Ingresa un costo y cantidad mayor a 0 para ver el análisis.")
 
 # ============================================================
 # FOOTER
