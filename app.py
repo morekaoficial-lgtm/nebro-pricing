@@ -808,7 +808,6 @@ with tab3:
                     margin_pct = (total_margin / total_cost * 100) if total_cost > 0 else 0
 
                     row[f"{lst} Unit"] = price_unit
-                    row[f"{lst} Total"] = total_revenue
                     row[f"{lst} Ganancia"] = total_margin
                     row[f"{lst} Margen%"] = margin_pct
 
