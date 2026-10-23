@@ -2,7 +2,7 @@
 """
 Calculadora de Listas de Precios — NEBRO SHOP
 Conecta con nebro-shop para obtener costos y calcular listas de precios
-Basado en la estructura de morekashop1 pero con reglas de pricing de NEBRO
+Sistema de listas FIJAS sobre costo (octubre 2026) — Mayoreo A mantiene su cálculo original
 """
 
 import streamlit as st
@@ -39,27 +39,40 @@ def shopify_request(url, headers=None, timeout=30):
     return response
 
 # ============================================================
-# LISTAS DE PRECIOS NEBRO — SISTEMA ACTUAL (NUEVO)
+# LISTAS DE PRECIOS NEBRO — SISTEMA ACTUAL (octubre 2026)
+# Precio = Costo × (1 + porcentaje)  —  porcentaje FIJO para todo costo
+# Mayoreo A NO se toca: sigue calculándose con costo ÷ factor (ver más abajo)
 # ============================================================
 PRICE_LISTS = [
     "Público",
-    "Mayoreo A",
     "Mayoreo C",
     "Mayoreo B",
+    "Mayoreo A",
     "Mayoreo Z",
     "Media Caja",
     "Caja",
+    "svip",
 ]
 
-# Tabla de porcentajes sobre costo por rango para Mayoreo C, B, Z, Media Caja, Caja
-# Precio = Costo × (1 + porcentaje)
-PRICING_TABLE = [
-    {"min": 0,    "max": 50,   "Mayoreo C": 1.00, "Mayoreo B": 0.68, "Mayoreo Z": 0.30, "Media Caja": 0.25, "Caja": 0.14},
-    {"min": 51,   "max": 150,  "Mayoreo C": 0.80, "Mayoreo B": 0.58, "Mayoreo Z": 0.30, "Media Caja": 0.25, "Caja": 0.14},
-    {"min": 151,  "max": 300,  "Mayoreo C": 0.75, "Mayoreo B": 0.54, "Mayoreo Z": 0.28, "Media Caja": 0.23, "Caja": 0.13},
-    {"min": 301,  "max": 500,  "Mayoreo C": 0.50, "Mayoreo B": 0.41, "Mayoreo Z": 0.28, "Media Caja": 0.23, "Caja": 0.13},
-    {"min": 501,  "max": 1000, "Mayoreo C": 0.45, "Mayoreo B": 0.38, "Mayoreo Z": 0.27, "Media Caja": 0.21, "Caja": 0.13},
-    {"min": 1001, "max": float("inf"), "Mayoreo C": 0.40, "Mayoreo B": 0.34, "Mayoreo Z": 0.24, "Media Caja": 0.19, "Caja": 0.13},
+# Margen sobre costo por lista (precio = costo × (1 + margen))
+LIST_MARKUPS = {
+    "Público":    1.00,    # 100% → costo × 2
+    "Mayoreo C":  0.65,    # 65%
+    "Mayoreo B":  0.50,    # 50%
+    "Mayoreo Z":  0.1775,  # 17.75%
+    "Media Caja": 0.1112,  # 11.12%
+    "Caja":       0.0527,  # 5.27%
+    "svip":       0.00,    # 0% → precio = costo
+}
+
+# Rangos de costo solo para filtrado/visualización (ya no afectan porcentajes)
+COST_BUCKETS = [
+    (0, 50, "$0-50"),
+    (51, 150, "$51-150"),
+    (151, 300, "$151-300"),
+    (301, 500, "$301-500"),
+    (501, 1000, "$501-1000"),
+    (1001, float("inf"), "$1001+"),
 ]
 
 # ============================================================
@@ -114,41 +127,36 @@ def calculate_mayoreo_a(cost):
     row = get_mayoreo_a_range(cost)
     return round(cost / row["factor"], 2)
 
-def get_pricing_range(cost):
-    """Devuelve la fila de la tabla según el costo"""
-    for row in PRICING_TABLE:
-        if row["min"] <= cost <= row["max"]:
-            return row
-    return PRICING_TABLE[-1]
-
 def get_rangename_pricing(cost):
-    """Devuelve el nombre del rango de costo para la tabla de pricing"""
-    for row in PRICING_TABLE:
-        if row["min"] <= cost <= row["max"]:
-            if row["max"] == float("inf"):
-                return f"${row['min']}+"
-            return f"${row['min']}-{row['max']}"
+    """Devuelve el bucket de costo (solo informativo/filtros)"""
+    for lo, hi, name in COST_BUCKETS:
+        if lo <= cost <= hi:
+            return name
     return "$1001+"
 
+def fmt_pct(value):
+    """Formatea 0.1775 → '17.75%', 0.50 → '50%'"""
+    txt = f"{value * 100:.2f}".rstrip("0").rstrip(".")
+    return f"{txt}%"
+
 def calculate_prices(cost):
-    """Calcula todas las listas de precios para un costo dado"""
+    """Calcula todas las listas de precios para un costo dado (porcentajes FIJOS)"""
     if cost is None or cost <= 0:
         return {lst: None for lst in PRICE_LISTS}
 
     mayoreo_a = calculate_mayoreo_a(cost)
-    pricing_row = get_pricing_range(cost)
     prices = {}
 
     for lst in PRICE_LISTS:
-        if lst == "Público":
-            # Público: Costo × 2
-            prices[lst] = round(cost * 2.00, 2)
-        elif lst == "Mayoreo A":
-            # Mayoreo A: sin descuento
+        if lst == "Mayoreo A":
+            # Mayoreo A: sin cambios (costo ÷ factor por rango)
             prices[lst] = mayoreo_a
-        elif lst in pricing_row:
-            # Mayoreo C, B, Z, Media Caja, Caja: Costo × (1 + porcentaje)
-            prices[lst] = round(cost * (1 + pricing_row[lst]), 2)
+        elif lst == "Público":
+            # Público: Costo × 2 (100% sobre costo)
+            prices[lst] = round(cost * 2.00, 2)
+        elif lst in LIST_MARKUPS:
+            # Mayoreo C, B, Z, Media Caja, Caja, svip: Costo × (1 + margen fijo)
+            prices[lst] = round(cost * (1 + LIST_MARKUPS[lst]), 2)
         else:
             prices[lst] = None
 
@@ -493,6 +501,7 @@ with tab1:
                     "Mayoreo Z": st.column_config.NumberColumn("Mayoreo Z", format="$%.2f"),
                     "Media Caja": st.column_config.NumberColumn("Media Caja", format="$%.2f"),
                     "Caja": st.column_config.NumberColumn("Caja", format="$%.2f"),
+                    "svip": st.column_config.NumberColumn("svip", format="$%.2f"),
                     "Precio Actual Shopify": st.column_config.NumberColumn("Precio Actual", format="$%.2f"),
                 }
             )
@@ -589,30 +598,41 @@ with tab2:
         df_table = pd.DataFrame(table_data)
         st.dataframe(df_table, use_container_width=True, hide_index=True)
 
-        st.markdown("### 📋 Tabla de Porcentajes sobre Costo")
+        st.markdown("### 📋 Porcentajes por Lista (sistema actual)")
         pricing_data = []
-        for r in PRICING_TABLE:
-            if r["max"] == float("inf"):
-                rango = f"${r['min']}+"
+        for lst in PRICE_LISTS:
+            if lst == "Mayoreo A":
+                continue  # Mayoreo A se muestra en su propia tabla de rangos
+            markup = LIST_MARKUPS[lst]
+            if lst == "Público":
+                formula = "Costo × 2.00"
+            elif lst == "svip":
+                formula = "Precio = Costo"
             else:
-                rango = f"${r['min']}-{r['max']}"
+                formula = f"Costo × (1 + {fmt_pct(markup)})"
             pricing_data.append({
-                "Rango Costo": rango,
-                "Mayoreo C": f"{r['Mayoreo C']*100:.0f}%",
-                "Mayoreo B": f"{r['Mayoreo B']*100:.0f}%",
-                "Mayoreo Z": f"{r['Mayoreo Z']*100:.0f}%",
-                "Media Caja": f"{r['Media Caja']*100:.0f}%",
-                "Caja": f"{r['Caja']*100:.0f}%",
+                "Lista": lst,
+                "% sobre costo": fmt_pct(markup),
+                "Fórmula": formula,
+                "Precio (tu costo)": round(cost_input * (1 + markup), 2),
             })
 
         df_pricing = pd.DataFrame(pricing_data)
-        st.dataframe(df_pricing, use_container_width=True, hide_index=True)
+        st.dataframe(
+            df_pricing,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "Precio (tu costo)": st.column_config.NumberColumn(format="$%.2f"),
+            }
+        )
 
         st.markdown("### 📋 Fórmulas")
         st.markdown("""
-        - **Público** = Costo × 2
-        - **Mayoreo A** = Costo ÷ factor (ver tabla arriba)
-        - **Mayoreo C, B, Z, Media Caja, Caja** = Costo × (1 + porcentaje)
+        - **Público** = Costo × 2 (100% sobre costo)
+        - **Mayoreo A** = Costo ÷ factor (ver tabla arriba, sin cambios)
+        - **Mayoreo C, B, Z, Media Caja, Caja** = Costo × (1 + % fijo por lista)
+        - **svip** = Costo (sin margen)
         """)
 
     with col_results:
@@ -655,7 +675,6 @@ with tab2:
             # Tabla detallada
             st.markdown("### 📋 Detalle por Lista")
             detail_data = []
-            pricing_row = get_pricing_range(cost_input)
             for lst in PRICE_LISTS:
                 price = prices[lst]
                 margin = price - cost_input
@@ -665,8 +684,10 @@ with tab2:
                     formula = "Costo × 2.00"
                 elif lst == "Mayoreo A":
                     formula = f"Costo ÷ {get_mayoreo_a_range(cost_input)['factor']}"
-                elif lst in pricing_row:
-                    formula = f"Costo × (1 + {pricing_row[lst]*100:.0f}%)"
+                elif lst == "svip":
+                    formula = "Precio = Costo"
+                elif lst in LIST_MARKUPS:
+                    formula = f"Costo × (1 + {fmt_pct(LIST_MARKUPS[lst])})"
                 else:
                     formula = "—"
 
