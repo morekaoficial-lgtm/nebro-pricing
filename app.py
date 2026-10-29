@@ -43,8 +43,7 @@ def shopify_request(url, headers=None, timeout=30):
 # LISTAS DE PRECIOS NEBRO — SISTEMA ACTUAL (octubre 2026)
 # Precio = Costo × (1 + porcentaje)  —  porcentaje FIJO para todo costo
 # Excepciones:
-#   - Público: ×3.5 si costo $20.01–$50 | ×3 si $50.01–$70 | ×2.5 si $70.01–$88 | ×2 si >$88
-#              (costo ≤ $20 se mantiene ×3, regla anterior)
+#   - Público: ×5 si costo ≤ $20 | ×3.5 si $20.01–$50 | ×3 si $50.01–$70 | ×2.5 si $70.01–$88 | ×2 si >$88
 #   - svip:    Costo + $1 si costo $1–$199; Costo + $5 si costo ≥ $200
 # Mayoreo A NO se toca: sigue calculándose con costo ÷ factor (ver más abajo)
 # ============================================================
@@ -142,9 +141,9 @@ def get_rangename_pricing(cost):
 
 def get_publico_mult(cost):
     """Multiplicador de la lista Pública según el costo (regla oct-2026, actualizada 30-oct).
-    ≤$20: ×3 (regla anterior) | $20.01–$50: ×3.5 | $50.01–$70: ×3 | $70.01–$88: ×2.5 | >$88: ×2"""
+    ≤$20: ×5 | $20.01–$50: ×3.5 | $50.01–$70: ×3 | $70.01–$88: ×2.5 | >$88: ×2"""
     if cost <= 20:
-        return 3.00
+        return 5.00
     if cost <= 50:
         return 3.50
     if cost <= 70:
@@ -670,7 +669,7 @@ with tab2:
 
         st.markdown("### 📋 Fórmulas")
         st.markdown("""
-        - **Público** = Costo × 3.5 si costo $20.01–$50; ×3 si $50.01–$70; ×2.5 si $70.01–$88; ×2 si >$88 (costo ≤ $20 → ×3)
+        - **Público** = Costo × 5 si costo ≤ $20; × 3.5 si $20.01–$50; ×3 si $50.01–$70; ×2.5 si $70.01–$88; ×2 si >$88
         - **Mayoreo A** = Costo ÷ factor (ver tabla arriba, sin cambios)
         - **Mayoreo C, B, Z, Media Caja, Caja** = Costo × (1 + % fijo por lista)
         - **svip** = Costo + $1 si costo $1–$199; Costo + $5 si costo ≥ $200
