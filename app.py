@@ -62,7 +62,7 @@ PRICE_LISTS = [
 # Público y svip tienen reglas especiales — ver calc_publico() / calc_svip()
 LIST_MARKUPS = {
     "Público":    1.00,    # no usado: Público calcula por rangos de costo — ver calc_publico()
-    "Mayoreo C":  0.65,    # 65%
+    "Mayoreo C":  0.70,    # 70%
     "Mayoreo B":  0.50,    # 50%
     "Mayoreo Z":  0.1775,  # 17.75%
     "Media Caja": 0.1112,  # 11.12%
