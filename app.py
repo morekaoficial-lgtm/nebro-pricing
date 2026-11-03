@@ -4,6 +4,7 @@ Calculadora de Listas de Precios — NEBRO SHOP
 Conecta con nebro-shop para obtener costos y calcular listas de precios
 Sistema de listas FIJAS sobre costo (octubre 2026) — Mayoreo A mantiene su cálculo original
 Reglas especiales (oct-2026): Público por rangos de costo (×3.5/×3/×2.5/×2); svip = costo + $1 ($1–$199) o + $5 (≥ $200)
+Regla nov-2026: Mayoreo C = (Público + Mayoreo B) ÷ 2
 """
 
 import streamlit as st
@@ -45,6 +46,7 @@ def shopify_request(url, headers=None, timeout=30):
 # Excepciones:
 #   - Público: ×5 si costo ≤ $20 | ×3.5 si $20.01–$50 | ×3 si $50.01–$70 | ×2.5 si $70.01–$88 | ×2 si >$88
 #   - svip:    Costo + $1 si costo $1–$199; Costo + $5 si costo ≥ $200
+#   - Mayoreo C: (Público + Mayoreo B) ÷ 2  (nov-2026)
 # Mayoreo A NO se toca: sigue calculándose con costo ÷ factor (ver más abajo)
 # ============================================================
 PRICE_LISTS = [
@@ -59,10 +61,9 @@ PRICE_LISTS = [
 ]
 
 # Margen sobre costo por lista (precio = costo × (1 + margen))
-# Público y svip tienen reglas especiales — ver calc_publico() / calc_svip()
+# Público, svip y Mayoreo C tienen reglas especiales — ver calc_publico() / calc_svip() / calculate_prices()
 LIST_MARKUPS = {
     "Público":    1.00,    # no usado: Público calcula por rangos de costo — ver calc_publico()
-    "Mayoreo C":  0.70,    # 70%
     "Mayoreo B":  0.50,    # 50%
     "Mayoreo Z":  0.1775,  # 17.75%
     "Media Caja": 0.1112,  # 11.12%
@@ -187,8 +188,12 @@ def calculate_prices(cost):
         elif lst == "svip":
             # svip: +$1 ($1–$199) / +$5 (≥ $200)
             prices[lst] = calc_svip(cost)
+        elif lst == "Mayoreo C":
+            # Mayoreo C (nov-2026): promedio de Público y Mayoreo B
+            mayoreo_b = cost * (1 + LIST_MARKUPS["Mayoreo B"])
+            prices[lst] = round((calc_publico(cost) + mayoreo_b) / 2, 2)
         elif lst in LIST_MARKUPS:
-            # Mayoreo C, B, Z, Media Caja, Caja: Costo × (1 + margen fijo)
+            # Mayoreo B, Z, Media Caja, Caja: Costo × (1 + margen fijo)
             prices[lst] = round(cost * (1 + LIST_MARKUPS[lst]), 2)
         else:
             prices[lst] = None
@@ -636,7 +641,6 @@ with tab2:
         for lst in PRICE_LISTS:
             if lst == "Mayoreo A":
                 continue  # Mayoreo A se muestra en su propia tabla de rangos
-            markup = LIST_MARKUPS[lst]
             if lst == "Público":
                 mult = get_publico_mult(cost_input)
                 formula = f"Costo × {mult:.2f}"
@@ -646,7 +650,13 @@ with tab2:
                 formula = "Costo + $1 ($1–$199)" if cost_input <= 199 else "Costo + $5 (≥ $200)"
                 pct_label = "+$1 / +$5"
                 display_price = calc_svip(cost_input) if cost_input > 0 else round(cost_input, 2)
+            elif lst == "Mayoreo C":
+                # Mayoreo C (nov-2026): promedio de Público y Mayoreo B
+                formula = "(Público + Mayoreo B) ÷ 2"
+                pct_label = "promedio"
+                display_price = round((calc_publico(cost_input) + cost_input * (1 + LIST_MARKUPS["Mayoreo B"])) / 2, 2) if cost_input > 0 else 0.0
             else:
+                markup = LIST_MARKUPS[lst]
                 formula = f"Costo × (1 + {fmt_pct(markup)})"
                 pct_label = fmt_pct(markup)
                 display_price = round(cost_input * (1 + markup), 2)
@@ -671,7 +681,8 @@ with tab2:
         st.markdown("""
         - **Público** = Costo × 5 si costo ≤ $20; × 3.5 si $20.01–$50; ×3 si $50.01–$70; ×2.5 si $70.01–$88; ×2 si >$88
         - **Mayoreo A** = Costo ÷ factor (ver tabla arriba, sin cambios)
-        - **Mayoreo C, B, Z, Media Caja, Caja** = Costo × (1 + % fijo por lista)
+        - **Mayoreo C** = (Público + Mayoreo B) ÷ 2
+        - **Mayoreo B, Z, Media Caja, Caja** = Costo × (1 + % fijo por lista)
         - **svip** = Costo + $1 si costo $1–$199; Costo + $5 si costo ≥ $200
         """)
 
@@ -726,6 +737,8 @@ with tab2:
                     formula = f"Costo ÷ {get_mayoreo_a_range(cost_input)['factor']}"
                 elif lst == "svip":
                     formula = "Costo + $1" if cost_input <= 199 else "Costo + $5"
+                elif lst == "Mayoreo C":
+                    formula = "(Público + Mayoreo B) ÷ 2"
                 elif lst in LIST_MARKUPS:
                     formula = f"Costo × (1 + {fmt_pct(LIST_MARKUPS[lst])})"
                 else:
